@@ -15,5 +15,5 @@ group :development do
 
   # Integration tests
   gem 'diffy'
-  gem 'clintegracon'
+  gem 'clintegracon', '0.5.3'
 end

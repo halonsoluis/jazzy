@@ -6,7 +6,6 @@ require 'jazzy/executable'
 require 'jazzy/highlighter'
 require 'jazzy/source_declaration'
 require 'jazzy/source_mark'
-require 'jazzy/xml_helper'
 
 module Jazzy
   # This module interacts with the sourcekitten command-line executable
@@ -116,15 +115,21 @@ module Jazzy
       make_default_doc_info(declaration)
     end
 
-    def self.parameters_from_xml(xml)
-      xml.xpath('Parameters/Parameter').map do |parameter_el|
-        {
-          name: XMLHelper.xpath(parameter_el, 'Name'),
-          discussion: Jazzy.markdown.render(
-              XMLHelper.xpath(parameter_el, 'Discussion') || '',
-            ),
-        }
-      end
+    def self.make_paragraphs(doc, key)
+      return nil unless doc[key]
+      doc[key].map do |p|
+        if p.keys.include?('Para')
+          Jazzy.markdown.render(p['Para'])
+        elsif p.keys.include?('Verbatim')
+          Jazzy.markdown.render("```\n" + p['Verbatim'] + "```\n")
+        else
+          warn "Jazzy could not recognize the `#{p.keys.first}` tag. " \
+               'Please report this by filing an issue at ' \
+               'https://github.com/realm/jazzy/issues along with the comment ' \
+               'including this tag.'
+          Jazzy.markdown.render(p.values.first)
+        end
+      end.join
     end
 
     def self.make_doc_info(doc, declaration)
@@ -132,21 +137,27 @@ module Jazzy
       xml_key = 'key.doc.full_as_xml'
       return process_undocumented_token(doc, declaration) unless doc[xml_key]
 
-      xml = Nokogiri::XML(doc[xml_key]).root
-      declaration.line = XMLHelper.attribute(xml, 'line').to_i
-      declaration.column = XMLHelper.attribute(xml, 'column').to_i
+      declaration.line = doc['key.doc.line']
+      declaration.column = doc['key.doc.column']
       declaration.declaration = Highlighter.highlight(
-        doc['key.parsed_declaration'] || XMLHelper.xpath(xml, 'Declaration'),
+        doc['key.parsed_declaration'] || doc['key.doc.declaration'],
         'swift',
       )
-      declaration.abstract = XMLHelper.xpath(xml, 'Abstract')
-      declaration.discussion = XMLHelper.xpath(xml, 'Discussion')
-      declaration.return = XMLHelper.xpath(xml, 'ResultDiscussion')
+      declaration.parameters = []
+      if doc['key.doc.parameters']
+        declaration.parameters = doc['key.doc.parameters'].map do |p|
+          {
+            name: p['name'],
+            discussion: make_paragraphs(p, 'discussion')
+          }
+        end
+      end
+      declaration.abstract = make_paragraphs(doc, 'key.doc.abstract')
+      declaration.discussion = make_paragraphs(doc, 'key.doc.discussion')
+      declaration.return = make_paragraphs(doc, 'key.doc.result_discussion')
 
       nodoc = ->(string) { string.to_s.include? '<dt>nodoc</dt>' }
       return if nodoc[declaration.abstract] || nodoc[declaration.discussion]
-
-      declaration.parameters = parameters_from_xml(xml)
 
       @documented_count += 1
     end

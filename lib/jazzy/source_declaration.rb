@@ -22,7 +22,7 @@ module Jazzy
     attr_accessor :end_line
 
     def overview
-      "#{abstract}\n\n#{discussion}".strip
+      "#{abstract}#{discussion}"
     end
   end
 end
