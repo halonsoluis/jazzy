@@ -152,14 +152,22 @@ module Jazzy
           }
         end
       end
-      declaration.abstract = make_paragraphs(doc, 'key.doc.abstract')
-      declaration.discussion = make_paragraphs(doc, 'key.doc.discussion')
+      stripped_comment = string_until_first_rest_definition(
+        doc['key.doc.comment'],
+      )
+      declaration.abstract = Jazzy.markdown.render(stripped_comment)
+      declaration.discussion = ''
       declaration.return = make_paragraphs(doc, 'key.doc.result_discussion')
 
-      nodoc = ->(string) { string.to_s.include? '<dt>nodoc</dt>' }
-      return if nodoc[declaration.abstract] || nodoc[declaration.discussion]
+      return if doc['key.doc.comment'].to_s.include?(':nodoc:')
 
       @documented_count += 1
+    end
+
+    def self.string_until_first_rest_definition(string)
+      matches = /^\s*:[^\s]+:/.match(string)
+      return string unless matches
+      string[0...matches.begin(0)]
     end
 
     def self.make_substructure(doc, declaration)
